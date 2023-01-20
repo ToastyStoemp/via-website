@@ -167,6 +167,11 @@ Example:
               "Breathing 1",
               ...
             ]
+          },
+          {
+            "label": "Enable Startup Animation",
+            "type": "toggle",
+            "content": ["id_custom_startup_animation", 0, 1]
           }
         ]
       }
@@ -177,7 +182,7 @@ Example:
 
 `label` defines the text label on the left of the control
 
-`type` defines the type of control. Valid values are `range`, `dropdown`, 
+`type` defines the type of control. Valid values are `range`, `dropdown`, `toggle` 
 
 `options` defines the possible values of the control (the numerical range, or string/integer values)
 
@@ -202,13 +207,15 @@ The toggle control is a toggle switch that controls a boolean (on/off) value.
 
 ```json
 {
-  "label": "God Mode",
+  "label": "Enable CapsLock Indicator",
   "type": "toggle",
-  "content": ["id_god_mode", 0, 1]
+  "content": ["id_capslock_enable", 0, 1]
 }
 ```
 
 The default value data is one byte, either `0` or `1`. The `options` element can be used to define the two values if required, using an array of two values.
+
+Note: as a reminder the 0 and 1 refer to the `channel_id` and `value_id`, not the value data itself.
 
 ### Range Control
 
@@ -218,10 +225,10 @@ The range control is a slider that controls a numeric value. The `options` eleme
 
 ```json
 {
-  "label": "Audacity",
+  "label": "CapsLock Brightness",
   "type": "range",
   "options": [0, 255],
-  "content": ["id_audacity", 0, 2]
+  "content": ["id_capslock_brightness", 0, 2]
 }
 ```
 
@@ -264,9 +271,9 @@ The color control is a swatch of color showing the current color value, which po
 
 ```json
 {
-  "label": "Color",
+  "label": "CapsLock Color",
   "type": "color",
-  "content": ["id_qmk_rgblight_color", 2, 4]
+  "content": ["id_capslock_color", 0, 3]
 }
 ```
 
@@ -330,24 +337,23 @@ For example, the following will only display the `Audacity` and `Tenacity` range
 
 ```json
 {
-  "label": "God Mode",
+  "label": "Enable CapsLock Indicator",
   "type": "toggle",
-  "content": ["id_god_mode", 0, 1]
+  "content": ["id_capslock_enable", 0, 1]
 },
 {
-  "showIf": "{id_god_mode} == 1",
+  "showIf": "{id_capslock_enable} == 1",
   "content": [
     {
-      "label": "Audacity",
+      "label": "CapsLock Brightness",
       "type": "range",
       "options": [0, 255],
-      "content": ["id_audacity", 0, 2]
+      "content": ["id_capslock_brightness", 0, 2]
     },
     {
-        "label": "Tenacity",
-        "type": "range",
-        "options": [0, 255],
-        "content": ["id_tenacity", 0, 3]
+        "label": "CapsLock Color",
+        "type": "color",
+        "content": ["id_capslock_color", 0, 3]
     }
   ]
 }
@@ -368,23 +374,23 @@ Example:
 "content": ["id_some_value_array[0]", 9, 99, 0]
 ```
 
-For example, to control 3 color values, rather than defining 3 enum values in firmware, a single enum value `id_buttglow_color` can be used, a single integer value used for `value_id`, and a value index appended in the UI control definition, as follows: 
+For example, to control 3 color values, rather than defining 3 enum values in firmware, a single enum value `id_custom_color` can be used, a single integer value used for `value_id`, and a value index appended in the UI control definition, as follows: 
 
 ```json
 {
   "label": "Color 1",
   "type": "color",
-  "content": ["id_buttglow_color[0]", 0, 4, 0]
+  "content": ["id_custom_color[0]", 0, 4, 0]
 },
 {
   "label": "Color 2",
   "type": "color",
-  "content": ["id_buttglow_color[1]", 0, 4, 1]
+  "content": ["id_custom_color[1]", 0, 4, 1]
 },
 {
   "label": "Color 3",
   "type": "color",
-  "content": ["id_buttglow_color[2]", 0, 4, 2]
+  "content": ["id_custom_color[2]", 0, 4, 2]
 }
 ```
 
@@ -421,12 +427,37 @@ When implementing a new feature, either in QMK Core or at the keyboard level, de
 For example:
 
 ```c
-enum via_buttglow_value {
-    id_buttglow_brightness   = 1,
-    id_buttglow_effect       = 2,
-    id_buttglow_effect_speed = 3,
-    id_buttglow_color        = 4
+enum via_custom_value_ids {
+    id_custom_brightness   = 1,
+    id_custom_effect       = 2,
+    id_custom_effect_speed = 3,
+    id_custom_color        = 4
 };
+```
+
+A complete list of QMK specific channel and value ids can be found here: https://github.com/qmk/qmk_firmware/blob/master/quantum/via.h
+
+### Memory Handlers
+
+
+
+```c
+typedef struct _custom_config_t {
+    bool toggle_example;
+    uint8_t range_example;
+    uint8_t dropdown_example;
+    uint8_t hue_picker_example;
+    uint8_t sat_picker_example;
+    uint16_t keycode_example;
+} custom_config_structure;
+
+custom_config_structure custom_config;
+```
+
+EECONFIG_KB_DATA_SIZE is the total amount of bytes used by the `custom_config_structure`, `uint8` counts as 1, while `uint16` counts as 2. The type `bool` even though being a single bit, is also defined as 1 byte.
+
+```c
+_Static_assert(sizeof(custom_config) == EECONFIG_KB_DATA_SIZE, "Mismatch in keyboard EECONFIG stored data");
 ```
 
 ### Command Handlers
@@ -455,17 +486,17 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
         {
             case id_custom_set_value:
             {
-                buttglow_config_set_value(value_id_and_data);
+                custom_config_set_value(value_id_and_data);
                 break;
             }
             case id_custom_get_value:
             {
-                buttglow_config_get_value(value_id_and_data);
+                custom_config_get_value(value_id_and_data);
                 break;
             }
             case id_custom_save:
             {
-                buttglow_config_save();
+                custom_config_save();
                 break;
             }
             default:
@@ -488,7 +519,7 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
 The following is an example of implementing the set/get command handlers specific to a feature - switch on possible values and set/get the values to/from a global struct which stores the state being used by the feature. Triggering update functions on state change can be optionally added.
 
 ```c
-void buttglow_config_set_value( uint8_t *data )
+void custom_config_set_value( uint8_t *data )
 {
     // data = [ value_id, value_data ]
     uint8_t *value_id   = &(data[0]);
@@ -496,16 +527,16 @@ void buttglow_config_set_value( uint8_t *data )
 
     switch ( *value_id )
     {
-        case id_buttglow_brightness:
+        case id_custom_brightness:
         {
-            g_buttglow_config.brightness = *value_data;
+            custom_config.brightness = *value_data;
             break;
         }
         ...
     }
 }
 
-void buttglow_config_get_value( uint8_t *data )
+void custom_config_get_value( uint8_t *data )
 {
     // data = [ value_id, value_data ]
     uint8_t *value_id   = &(data[0]);
@@ -513,20 +544,20 @@ void buttglow_config_get_value( uint8_t *data )
 
     switch ( *value_id )
     {
-        case id_buttglow_brightness:
+        case id_custom_brightness:
         {
-            *value_data = g_buttglow_config.brightness;
+            *value_data = custom_config.brightness;
             break;
         }
         ...
     }
 }
 
-void buttglow_config_save(void)
+void custom_config_save(void)
 {
-    eeprom_update_block( &g_buttglow_config,
-        ((void*)BUTTGLOW_CONFIG_EEPROM_ADDR),
-        sizeof(buttglow_config) );
+    eeprom_update_block( &custom_config,
+        ((void*)CUSTOM_CONFIG_EEPROM_ADDR),
+        sizeof(custom_config_structure) );
 }
 ```
 
@@ -539,7 +570,7 @@ The `id_custom_save` command is sent after one or more `id_custom_set_value` com
 The following is an example of a custom UI control using an array value, the array index is after the `value_id`, thus it is in `value_data[0]` and the actual value starts at `value_data[1]`, whereas for non-array values, the value starts at `value_data[0]`.
 
 ```c
-void buttglow_config_set_value( uint8_t *data )
+void custom_config_set_value( uint8_t *data )
 {
     // data = [ value_id, value_data ]
     uint8_t *value_id = &(data[0]);
@@ -547,13 +578,13 @@ void buttglow_config_set_value( uint8_t *data )
 
     switch ( *value_id )
     {
-        case id_buttglow_color: // == 4
+        case id_custom_color: // == 4
         {
             uint8_t index = value_data[0]; // == 0,1,2
             if ( index >= 0 && index < 3 )
             {
-                g_buttglow_config.color[index].h = value_data[1];
-                g_buttglow_config.color[index].s = value_data[2];
+                custom_config.color[index].h = value_data[1];
+                custom_config.color[index].s = value_data[2];
             }
         }
         ...
